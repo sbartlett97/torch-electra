@@ -55,7 +55,7 @@ class ELECTRATrainer(object):
     progress_bar = None
     steps = 0
 
-    def __init__(self, gen_config, disc_config, tokenizer_path, dataset, name):
+    def __init__(self, gen_config, disc_config, tokenizer_path, dataset, name, batch_size, accumulation_steps):
         super(ELECTRATrainer, self).__init__()
         self.tokenizer = ElectraTokenizerFast.from_pretrained(tokenizer_path)
         self._name = name
@@ -75,7 +75,7 @@ class ELECTRATrainer(object):
 
         tokenized_dataset = dataset.map(self.tokenize, batched=True)
         tokenized_dataset.with_format("torch")
-        self.dataloader = DataLoader(tokenized_dataset, batch_size=1, pin_memory=True)
+        self.dataloader = DataLoader(tokenized_dataset, batch_size=batch_size, pin_memory=True)
         self.generator.to(device)
         self.discriminator.to(device)
 
@@ -86,7 +86,8 @@ class ELECTRATrainer(object):
         self.lr_scheduler = get_linear_schedule_with_warmup(
             self.optim, num_warmup_steps=1000, num_training_steps=20000000
         )
-
+        self._batch_size = batch_size
+        self._accumulation_steps = accumulation_steps
         self.disc_loss_func = torch.nn.BCEWithLogitsLoss()
         self.gen_loss_func = torch.nn.CrossEntropyLoss()
 
@@ -149,7 +150,6 @@ class ELECTRATrainer(object):
             running_loss = 0.0
             accumulation_loss = 0.0
             steps = 0
-            accumulation_steps = 128
             scaler = torch.amp.GradScaler()
             for batch_idx, batch in enumerate(self.dataloader):
                 with torch.amp.autocast("cuda"):
@@ -169,13 +169,13 @@ class ELECTRATrainer(object):
                     disc_loss = self.discriminator_forward(replaced_input_ids, attention_mask, disc_labels)
                     combined_loss = gen_loss * 1.0 + disc_loss * 50
 
-                combined_loss += combined_loss / accumulation_steps
+                combined_loss += combined_loss / self._accumulation_steps
 
                 scaler.scale(combined_loss).backward()
                 running_loss += combined_loss.item()
                 steps += 1
 
-                if (batch_idx + 1) % accumulation_steps == 0:
+                if (batch_idx + 1) % self._accumulation_steps == 0:
 
                     scaler.step(self.optim)
                     scaler.update()
@@ -183,9 +183,9 @@ class ELECTRATrainer(object):
 
                     self.optim.zero_grad()
                     if steps % 640 == 0:
-                        tqdm.write(f"Step [{steps}/{max_steps}], Loss = {accumulation_loss/accumulation_steps}")
-                    writer.writerow([steps, accumulation_loss/accumulation_steps])
-                    self.progress_bar.set_description(f"Training Progress - Loss: {accumulation_loss/accumulation_steps}")
+                        tqdm.write(f"Step [{steps}/{max_steps}], Loss = {accumulation_loss/self._accumulation_steps}")
+                    writer.writerow([steps, accumulation_loss/self._accumulation_steps])
+                    self.progress_bar.set_description(f"Training Progress - Loss: {accumulation_loss/self._accumulation_steps}")
                     accumulation_loss = 0.0
                 else:
                     accumulation_loss += combined_loss.item()

@@ -75,7 +75,7 @@ class ELECTRATrainer(object):
 
         tokenized_dataset = dataset.map(self.tokenize, batched=True)
         tokenized_dataset.with_format("torch")
-        self.dataloader = DataLoader(tokenized_dataset, batch_size=8, pin_memory=True)
+        self.dataloader = DataLoader(tokenized_dataset, batch_size=1, pin_memory=True)
         self.generator.to(device)
         self.discriminator.to(device)
 
@@ -149,7 +149,7 @@ class ELECTRATrainer(object):
             running_loss = 0.0
             accumulation_loss = 0.0
             steps = 0
-            accumulation_steps = 128 // 8
+            accumulation_steps = 128
             scaler = torch.amp.GradScaler()
             for batch_idx, batch in enumerate(self.dataloader):
                 with torch.amp.autocast("cuda"):

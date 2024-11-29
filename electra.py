@@ -55,10 +55,10 @@ class ELECTRATrainer(object):
     progress_bar = None
     steps = 0
 
-    def __init__(self, gen_config, disc_config, tokenizer_path, dataset):
+    def __init__(self, gen_config, disc_config, tokenizer_path, dataset, name):
         super(ELECTRATrainer, self).__init__()
         self.tokenizer = ElectraTokenizerFast.from_pretrained(tokenizer_path)
-
+        self._name = name
         gen_config.vocab_size = len(self.tokenizer)
         disc_config.vocab_size = len(self.tokenizer)
         self.generator = ElectraForMaskedLM(gen_config)
@@ -227,8 +227,8 @@ class ELECTRATrainer(object):
         plt.legend()
 
         plt.savefig("loss_curve.png", dpi=600)
-        self.discriminator.save_pretrained("./models/slc-multilingual-electra-discriminator")
-        self.generator.save_pretrained("./models/slc-multiligual-electra-generator")
+        self.discriminator.save_pretrained(f"./models/{self._name}")
+        self.generator.save_pretrained(f"./models/{self._name}")
 
     def tokenize(self, sample):
         return self.tokenizer(sample['text'], padding="max_length", truncation=True, max_length=512,

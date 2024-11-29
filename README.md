@@ -2,6 +2,8 @@
 
 This repository contains a custom implementation of the ELECTRA training method using PyTorch and HuggingFace's Transformers library. ELECTRA (Efficiently Learning an Encoder that Classifies Token Replacements Accurately) is a transformer-based model pre-trained as a discriminator rather than a generator, resulting in a more compute-efficient pre-training approach.
 
+This repo is currently a work in progress. My aim is to create an easy to use implementation of this training method that can be extended to trial it with more than just the base models provided on huggingface/generated from the same configs.
+
 
 ## References
 

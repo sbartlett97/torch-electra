@@ -7,7 +7,7 @@ from typing import Any, Optional, Tuple
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 from transformers import ElectraTokenizerFast, ElectraForMaskedLM, ElectraForPreTraining, \
-    DataCollatorForLanguageModeling, get_polynomial_decay_schedule_with_warmup, get_linear_schedule_with_warmup
+    DataCollatorForLanguageModeling, get_linear_schedule_with_warmup
 
 import pandas as pd
 import matplotlib.pyplot as plt

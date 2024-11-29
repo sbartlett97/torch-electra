@@ -2,7 +2,6 @@ import argparse
 import pydantic
 
 from datasets import load_dataset
-from fsspec.registry import default
 from transformers import ElectraConfig
 from electra import ELECTRATrainer
 
@@ -19,6 +18,9 @@ class TrainingOptions(pydantic.BaseModel):
 def main():
     pass
 
+# TODO: Add configuration of hyperparemters for training
+# TODO: Implement options for running hyperparameter searching using libraries like optuna
+# TODO: Add support for experiment tracking (MLFlow, WeightsAndBiases etc..)
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description="Run ELECTRA pre-training")
 

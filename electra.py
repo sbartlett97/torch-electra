@@ -101,6 +101,8 @@ class ELECTRATrainer(object):
         self.gumbel = torch.distributions.gumbel.Gumbel(torch.tensor(0., device=device, dtype=self.generator.dtype),
                                                         torch.tensor(1., device=device, dtype=self.generator.dtype))
 
+        self._last_loss = None
+
     @staticmethod
     def get_layerwise_lr(models, base_lr, layer_decay):
         """
@@ -193,6 +195,7 @@ class ELECTRATrainer(object):
                         tqdm.write(f"Step [{steps}/{max_steps}], Loss = {accumulation_loss/self._accumulation_steps}")
                     writer.writerow([steps, accumulation_loss/self._accumulation_steps])
                     self.progress_bar.set_description(f"Training Progress - Loss: {accumulation_loss/self._accumulation_steps}")
+                    self._last_loss = accumulation_loss/self._accumulation_steps
                     accumulation_loss = 0.0
                 else:
                     accumulation_loss += combined_loss.item()
@@ -237,6 +240,7 @@ class ELECTRATrainer(object):
         plt.savefig("loss_curve.png", dpi=600)
         self.discriminator.save_pretrained(f"./models/{self._name}")
         self.generator.save_pretrained(f"./models/{self._name}")
+        return self._last_loss
 
     def tokenize(self, sample):
         return self.tokenizer(sample['text'], padding="max_length", truncation=True, max_length=512,

@@ -55,12 +55,17 @@ class ELECTRATrainer(object):
     progress_bar = None
     steps = 0
 
-    def __init__(self, gen_config, disc_config, tokenizer_path, dataset, name, batch_size, accumulation_steps):
+    def __init__(self, gen_config, disc_config, tokenizer_path, dataset, name, batch_size, accumulation_steps,
+                 adam_b1=0.9, adam_b2=0.999, adam_e=1e-6, weight_decay=0.01, lr=2e-4, warmup_steps=1000,
+                 train_steps=2000000):
         super(ELECTRATrainer, self).__init__()
-        self.tokenizer = ElectraTokenizerFast.from_pretrained(tokenizer_path)
+
         self._name = name
+        self.tokenizer = ElectraTokenizerFast.from_pretrained(tokenizer_path)
+
         gen_config.vocab_size = len(self.tokenizer)
         disc_config.vocab_size = len(self.tokenizer)
+
         self.generator = ElectraForMaskedLM(gen_config)
         self.discriminator = ElectraForPreTraining(disc_config)
 
@@ -76,15 +81,17 @@ class ELECTRATrainer(object):
         tokenized_dataset = dataset.map(self.tokenize, batched=True)
         tokenized_dataset.with_format("torch")
         self.dataloader = DataLoader(tokenized_dataset, batch_size=batch_size, pin_memory=True)
+
         self.generator.to(device)
         self.discriminator.to(device)
 
-        grouped_params = self.get_layerwise_lr([self.generator, self.discriminator], base_lr=2e-4, layer_decay=0.95)
+        grouped_params = self.get_layerwise_lr([self.generator, self.discriminator], base_lr=lr, layer_decay=0.95)
 
-        self.optim = torch.optim.AdamW(grouped_params, eps=1e-6, lr=2e-4)
+        self.optim = torch.optim.AdamW(grouped_params, betas=(adam_b1, adam_b2),eps=adam_e, lr=lr,
+                                       weight_decay=weight_decay)
 
         self.lr_scheduler = get_linear_schedule_with_warmup(
-            self.optim, num_warmup_steps=1000, num_training_steps=20000000
+            self.optim, num_warmup_steps=warmup_steps, num_training_steps=train_steps
         )
         self._batch_size = batch_size
         self._accumulation_steps = accumulation_steps
@@ -196,6 +203,7 @@ class ELECTRATrainer(object):
 
             return steps
 
+    # TODO: Add calculation of token_typeI_ids for tracking which sentence a token pertains to in a sequence
     def train(self, steps):
         total_steps = 0
 

@@ -11,6 +11,7 @@ from transformers import ElectraTokenizerFast, ElectraForMaskedLM, ElectraForPre
 
 import pandas as pd
 import matplotlib.pyplot as plt
+from torch.optim.lr_scheduler import CyclicLR
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -90,8 +91,14 @@ class ELECTRATrainer(object):
         self.optim = torch.optim.AdamW(grouped_params, betas=(adam_b1, adam_b2),eps=adam_e, lr=lr,
                                        weight_decay=weight_decay)
 
-        self.lr_scheduler = get_linear_schedule_with_warmup(
-            self.optim, num_warmup_steps=warmup_steps, num_training_steps=train_steps
+        self.lr_scheduler = CyclicLR(
+            self.optim,
+            base_lr=0,  # Starting learning rate
+            max_lr=lr,  # Peak learning rate
+            step_size_up=warmup_steps,  # Steps to reach peak LR
+            step_size_down=train_steps - warmup_steps,  # Steps to decrease back to base_lr
+            cycle_momentum=False,  # Don't cycle momentum
+            mode='triangular'  # Use triangular policy
         )
         self._batch_size = batch_size
         self._accumulation_steps = accumulation_steps
@@ -208,6 +215,10 @@ class ELECTRATrainer(object):
 
     # TODO: Add calculation of token_typeI_ids for tracking which sentence a token pertains to in a sequence
     def train(self, steps):
+        # Add gradient clipping
+        torch.nn.utils.clip_grad_norm_(self.generator.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(self.discriminator.parameters(), 1.0)
+        
         total_steps = 0
 
         self.progress_bar = tqdm(total=steps, desc="Training Progress", unit=" steps")
@@ -248,15 +259,16 @@ class ELECTRATrainer(object):
                               return_tensors="pt")
 
     def replace_masked_tokens_with_predictions(self, input_ids, g_predictions, masked_indices):
-        """Replaces masked tokens with generator's most confident predictions and creates labels for discriminator.
-        """
-        replaced_input_ids = input_ids.clone().to(device)
-        gumbel_noise = self.gumbel.sample(g_predictions.shape).to(device)
-        gumbel_logits = g_predictions + gumbel_noise
-
-        sampled_predictions = gumbel_logits.argmax(dim=-1)
-
+        """Replaces masked tokens with generator's predictions and creates labels for discriminator."""
+        # Move input_ids to the same device as other tensors
+        input_ids = input_ids.to(device)
+        replaced_input_ids = input_ids.clone()
+        
+        sampled_predictions = g_predictions.argmax(dim=-1)
         replaced_input_ids[masked_indices] = sampled_predictions[masked_indices]
-        labels = torch.zeros_like(input_ids, dtype=torch.float).to(device)
-        labels[masked_indices] = 1.0
+        
+        # Ensure all tensors are on the same device for comparison
+        labels = torch.zeros_like(input_ids, dtype=torch.float, device=device)
+        labels[masked_indices] = (replaced_input_ids[masked_indices] != input_ids[masked_indices]).float()
+        
         return replaced_input_ids, labels

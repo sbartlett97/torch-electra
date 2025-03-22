@@ -11,6 +11,7 @@ A PyTorch-based implementation of the ELECTRA (Efficiently Learning an Encoder t
 - 🔄 Gradient accumulation for handling large batch sizes
 - 🎛️ Hyperparameter optimization using Optuna
 - 💾 Automatic checkpointing
+- 📈 Triangular learning rate scheduling (matching original paper)
 
 ## Installation
 
@@ -63,20 +64,19 @@ python main.py --preset base --optuna
 
 The implementation follows the original ELECTRA paper's architecture:
 
-- **Generator**: Smaller transformer model that predicts masked tokens
-- **Discriminator**: Larger transformer model that learns to distinguish between real and replaced tokens
-- **Shared embeddings** between generator and discriminator
-- **Size ratios**:
+- **Generator & Discriminator**: Same number of layers but different widths
+- **Model Configurations**:
   - Small: 12-layer discriminator, 12-layer generator (generator has 1/3 the width)
   - Base: 12-layer discriminator, 12-layer generator (generator has 1/3 the width)
   - Large: 24-layer discriminator, 24-layer generator (generator has 1/4 the width)
+- **Shared embeddings** between generator and discriminator
 
 ## Training Details
 
 - Uses masked language modeling (MLM) for the generator
 - Implements replaced token detection (RTD) for the discriminator
 - Supports gradient accumulation for effective batch sizes
-- Implements learning rate warmup and decay
+- Implements triangular learning rate schedule with warmup
 - Uses mixed precision training for improved performance
 - Tracks and saves training metrics
 

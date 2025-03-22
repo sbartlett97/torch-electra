@@ -11,7 +11,7 @@ from transformers import ElectraTokenizerFast, ElectraForMaskedLM, ElectraForPre
 
 import pandas as pd
 import matplotlib.pyplot as plt
-from torch.optim.lr_scheduler import CyclicalLR
+from torch.optim.lr_scheduler import CyclicLR
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -91,7 +91,7 @@ class ELECTRATrainer(object):
         self.optim = torch.optim.AdamW(grouped_params, betas=(adam_b1, adam_b2),eps=adam_e, lr=lr,
                                        weight_decay=weight_decay)
 
-        self.lr_scheduler = CyclicalLR(
+        self.lr_scheduler = CyclicLR(
             self.optim,
             base_lr=0,  # Starting learning rate
             max_lr=lr,  # Peak learning rate
@@ -259,12 +259,16 @@ class ELECTRATrainer(object):
                               return_tensors="pt")
 
     def replace_masked_tokens_with_predictions(self, input_ids, g_predictions, masked_indices):
-        """Replaces selected tokens with generator's predictions using multinomial sampling."""
-        replaced_input_ids = input_ids.clone().to(device)
-        probs = torch.softmax(g_predictions, dim=-1)
-        sampled_predictions = torch.multinomial(probs.view(-1, probs.size(-1)), 1).view(probs.size(0), -1)
+        """Replaces masked tokens with generator's predictions and creates labels for discriminator."""
+        # Move input_ids to the same device as other tensors
+        input_ids = input_ids.to(device)
+        replaced_input_ids = input_ids.clone()
         
+        sampled_predictions = g_predictions.argmax(dim=-1)
         replaced_input_ids[masked_indices] = sampled_predictions[masked_indices]
-        labels = torch.zeros_like(input_ids, dtype=torch.float).to(device)
+        
+        # Ensure all tensors are on the same device for comparison
+        labels = torch.zeros_like(input_ids, dtype=torch.float, device=device)
         labels[masked_indices] = (replaced_input_ids[masked_indices] != input_ids[masked_indices]).float()
+        
         return replaced_input_ids, labels

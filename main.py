@@ -50,18 +50,21 @@ class ElectraTrainingConfig:
         return f"google/electra-{self.discriminator_size}-discriminator"
 
 def create_model_configs(config: ElectraTrainingConfig) -> tuple[ElectraConfig, ElectraConfig]:
-    """Create generator and discriminator configs based on the paper's specifications"""
+    """Create generator and discriminator configs with proper size ratios"""
     disc_config = ElectraConfig.from_pretrained(config.discriminator_config_name)
     gen_config = ElectraConfig.from_pretrained(config.generator_config_name)
     
-    # Ensure generator is smaller than discriminator (as per paper)
-    if config.generator_size == "small" and config.discriminator_size in ["base", "large"]:
-        gen_config.hidden_size = disc_config.hidden_size // 3
+    # Ensure generator and discriminator have compatible hidden sizes
+    if config.generator_size == "small" and config.discriminator_size == "base":
+        # Base discriminator has hidden_size=768
+        # Generator should be 1/3 of that
+        gen_config.hidden_size = disc_config.hidden_size // 3  # 256
+        gen_config.embedding_size = disc_config.hidden_size  # Keep same as discriminator
         gen_config.num_attention_heads = disc_config.num_attention_heads // 3
         gen_config.intermediate_size = disc_config.intermediate_size // 3
     
     return gen_config, disc_config
-
+    
 def train_electra(config: ElectraTrainingConfig, trial: Optional[optuna.Trial] = None) -> Optional[float]:
     """Run ELECTRA training with given configuration"""
     logger.info(f"Starting ELECTRA training with configuration:\n{config}")

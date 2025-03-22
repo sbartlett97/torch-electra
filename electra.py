@@ -11,6 +11,7 @@ from transformers import ElectraTokenizerFast, ElectraForMaskedLM, ElectraForPre
 
 import pandas as pd
 import matplotlib.pyplot as plt
+from torch.optim.lr_scheduler import CyclicalLR
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -90,8 +91,14 @@ class ELECTRATrainer(object):
         self.optim = torch.optim.AdamW(grouped_params, betas=(adam_b1, adam_b2),eps=adam_e, lr=lr,
                                        weight_decay=weight_decay)
 
-        self.lr_scheduler = get_linear_schedule_with_warmup(
-            self.optim, num_warmup_steps=warmup_steps, num_training_steps=train_steps
+        self.lr_scheduler = CyclicalLR(
+            self.optim,
+            base_lr=0,  # Starting learning rate
+            max_lr=lr,  # Peak learning rate
+            step_size_up=warmup_steps,  # Steps to reach peak LR
+            step_size_down=train_steps - warmup_steps,  # Steps to decrease back to base_lr
+            cycle_momentum=False,  # Don't cycle momentum
+            mode='triangular'  # Use triangular policy
         )
         self._batch_size = batch_size
         self._accumulation_steps = accumulation_steps

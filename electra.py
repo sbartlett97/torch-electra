@@ -208,6 +208,10 @@ class ELECTRATrainer(object):
 
     # TODO: Add calculation of token_typeI_ids for tracking which sentence a token pertains to in a sequence
     def train(self, steps):
+        # Add gradient clipping
+        torch.nn.utils.clip_grad_norm_(self.generator.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(self.discriminator.parameters(), 1.0)
+        
         total_steps = 0
 
         self.progress_bar = tqdm(total=steps, desc="Training Progress", unit=" steps")
@@ -248,15 +252,12 @@ class ELECTRATrainer(object):
                               return_tensors="pt")
 
     def replace_masked_tokens_with_predictions(self, input_ids, g_predictions, masked_indices):
-        """Replaces masked tokens with generator's most confident predictions and creates labels for discriminator.
-        """
+        """Replaces selected tokens with generator's predictions using multinomial sampling."""
         replaced_input_ids = input_ids.clone().to(device)
-        gumbel_noise = self.gumbel.sample(g_predictions.shape).to(device)
-        gumbel_logits = g_predictions + gumbel_noise
-
-        sampled_predictions = gumbel_logits.argmax(dim=-1)
-
+        probs = torch.softmax(g_predictions, dim=-1)
+        sampled_predictions = torch.multinomial(probs.view(-1, probs.size(-1)), 1).view(probs.size(0), -1)
+        
         replaced_input_ids[masked_indices] = sampled_predictions[masked_indices]
         labels = torch.zeros_like(input_ids, dtype=torch.float).to(device)
-        labels[masked_indices] = 1.0
+        labels[masked_indices] = (replaced_input_ids[masked_indices] != input_ids[masked_indices]).float()
         return replaced_input_ids, labels
